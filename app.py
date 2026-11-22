@@ -23,7 +23,7 @@ from flask import Flask, jsonify, request, send_from_directory
 import audio
 import remix_finder as rf
 
-app = Flask(__name__, static_folder="static", static_url_path="/static")
+app = Flask(__name__, static_folder="docs", static_url_path="")
 POOL = ThreadPoolExecutor(max_workers=6)
 CHARTS = {"fr": 1109890291, "world": 3155776842, "us": 1313621735}  # playlists Deezer « Top »
 YT_REGION = {"fr": "FR", "world": None, "us": "US"}
@@ -146,12 +146,12 @@ def youtube_stats(items):
 # ------------------------------------------------------------------ routes
 @app.get("/")
 def index():
-    return send_from_directory("static", "index.html")
+    return send_from_directory("docs", "index.html")
 
 
 @app.get("/api/status")
 def status():
-    return jsonify({"youtube": bool(yt_key()), "soundcloud": bool(sc_keys())})
+    return jsonify({"youtube": bool(yt_key()), "soundcloud": bool(sc_keys()), "serveur": True})
 
 
 @app.get("/api/origin")

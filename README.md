@@ -2,6 +2,27 @@
 
 Retrouve les remix, mashups, bootlegs et edits d'une chanson, avec les tendances du moment et des idées de mashup selon le tempo et la tonalité.
 
+## Version en ligne (sans rien installer)
+
+Le dossier `docs/` contient une version qui fonctionne entièrement dans le navigateur. Elle est publiée sur GitHub Pages :
+
+**https://fulberitodesign.github.io/remix-finder/**
+
+Différences avec la version Python :
+
+| | En ligne (GitHub Pages) | Python (`app.py`) |
+|---|---|---|
+| Installation | aucune | Python + dépendances |
+| Sources | MusicBrainz, Deezer, Mixcloud, YouTube (clé dans les réglages ⚙) | les mêmes + SoundCloud |
+| Tempo et tonalité | analyse en JavaScript, un peu moins précise | librosa |
+| Cache des analyses | dans le navigateur | `cache/analyse.json` |
+
+La clé YouTube saisie dans les réglages reste dans ton navigateur (stockage local) et n'est envoyée qu'à Google. Limite-la à l'adresse du site dans la Google Cloud Console.
+
+### Publier sur GitHub Pages
+
+Dans le dépôt : **Settings → Pages → Build and deployment → Source : Deploy from a branch**, branche `main`, dossier `/docs`. Sur un compte GitHub gratuit, le dépôt doit être public.
+
 ## Installation
 
 Il faut Python 3.10 ou plus récent.
@@ -59,7 +80,7 @@ $env:YOUTUBE_API_KEY="ta_cle"; python app.py
 
 ## Limites
 
-- Le tempo et la tonalité sont estimés sur 30 secondes d'extrait : le tempo peut sortir à la moitié ou au double, et la tonalité peut se tromper sur certains titres.
+- Le tempo et la tonalité sont estimés sur 30 secondes d'extrait. Dans la version en ligne, la tonalité trouvée est identique à celle de librosa dans environ 6 cas sur 10, et voisine sur la roue de Camelot dans la plupart des autres : le tempo peut sortir à la moitié ou au double, et la tonalité peut se tromper sur certains titres.
 - La première recherche d'idées analyse une soixantaine d'extraits et peut prendre 30 à 60 secondes. Ensuite, le cache `cache/analyse.json` rend l'opération quasi instantanée.
 - Le comptage des remix dans les tendances se base sur la recherche Deezer : c'est un ordre de grandeur, pas un chiffre exact.
 - TikTok n'a pas d'API publique pour ses sons tendance : l'appli renvoie vers le TikTok Creative Center.
@@ -71,6 +92,14 @@ Le script d'origine fonctionne toujours :
 ```bash
 python remix_finder.py "The Weeknd" "Blinding Lights" --csv resultats.csv
 ```
+
+## Organisation du code
+
+- `docs/` : l'interface (HTML, CSS, JavaScript), partagée par les deux versions. `engine.js` et `analysis.js` sont le moteur du navigateur. L'interface utilise le serveur Python s'il répond, sinon ce moteur.
+- `app.py` : serveur Flask (API + sert `docs/`).
+- `remix_finder.py` : recherche dans les sources, utilisable aussi en ligne de commande.
+- `audio.py` : analyse du tempo et de la tonalité avec librosa.
+- `tests/` : tests hors ligne.
 
 ## Tester
 

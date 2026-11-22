@@ -43,9 +43,21 @@
     if (p.length === 1) return p[0];
     return MONTHS[parseInt(p[1], 10) - 1] + ' ' + p[0];
   }
+  // Mode serveur (python app.py) si /api/status répond, sinon moteur du navigateur (GitHub Pages)
+  var serverMode = null;
+  var modeReady = fetch('api/status').then(function (r) {
+    if (!r.ok) throw 0;
+    return r.json();
+  }).then(function (j) { serverMode = !!(j && j.serveur); }).catch(function () { serverMode = false; });
   function api(path, params) {
+    return modeReady.then(function () {
+      if (!serverMode) return window.RF.api(path, params);
+      return serverApi(path, params);
+    });
+  }
+  function serverApi(path, params) {
     var q = new URLSearchParams(params || {}).toString();
-    return fetch(path + (q ? '?' + q : '')).then(function (r) {
+    return fetch(path.replace(/^\//, '') + (q ? '?' + q : '')).then(function (r) {
       return r.json().then(function (j) {
         if (!r.ok) throw new Error(j.error || ('Erreur ' + r.status));
         return j;
@@ -233,7 +245,7 @@
         '<h1>Trouve le titre parfait pour ton prochain <em>mashup</em>.</h1>' +
         '<p>Choisis une chanson : l\'appli analyse son tempo et sa tonalité, puis cherche les titres compatibles dans le top du moment et chez les artistes proches.</p>' :
         '<h1>Tous les <em>remix</em>, mashups et edits d\'une chanson, au même endroit.</h1>' +
-        '<p>Recherche sur MusicBrainz, Deezer, Mixcloud, SoundCloud et YouTube, avec tri par popularité et par vues gagnées chaque jour.</p>')) +
+        '<p>Recherche sur MusicBrainz, Deezer, Mixcloud' + (serverMode === false ? ' et YouTube' : ', SoundCloud et YouTube') + ', avec tri par popularité et par vues gagnées chaque jour.</p>')) +
       '<div class="searchbox">' +
       '<form id="search-form" role="search" autocomplete="off">' +
       '<label class="field">' + I.search +
@@ -352,10 +364,12 @@
         return '<button type="button" class="cat-btn" data-cat="' + t[0] + '" aria-pressed="' + (S.cat === t[0]) + '"><span><span class="dot" style="background:' + t[2] + '"></span>' + t[1] + '</span><span class="n">' + (S.loading ? '' : (counts[t[0]] || 0)) + '</span></button>';
       }).join('') + '</div>' +
       '<div class="panel" style="padding:4px 16px"><label class="check"><input type="checkbox" id="official"' + (S.officialOnly ? ' checked' : '') + '> Remix officiels uniquement</label></div>' +
+      (serverMode === false ?
+        (S.youtube ? '' : '<div class="notice">Ajoute ta clé YouTube dans les <button type="button" class="linklike" data-settings>réglages</button> pour les mashups et remix publiés sur YouTube.</div>') :
       (S.youtube && S.soundcloud ? '' : '<div class="notice">' +
         (S.youtube ? '' : 'Ajoute une clé <code>YOUTUBE_API_KEY</code> pour les mashups et remix publiés sur YouTube. ') +
         (S.soundcloud ? '' : 'Ajoute <code>SOUNDCLOUD_CLIENT_ID</code> et <code>SOUNDCLOUD_CLIENT_SECRET</code> pour chercher sur SoundCloud.') +
-        ' Voir le README.</div>') +
+        ' Voir le README.</div>')) +
       '</aside>';
 
     var list;
@@ -399,7 +413,7 @@
 
   function ideasInner() {
     if (S.ideasLoading) {
-      return '<div class="loading-line"><span class="spinner"></span>Analyse du tempo et de la tonalité des titres tendance… (la première fois peut prendre une minute)</div>' +
+      return '<div class="loading-line"><span class="spinner"></span><span id="ideas-progress">Analyse du tempo et de la tonalité des titres tendance… (la première fois peut prendre une minute)</span></div>' +
         '<div class="grid">' + [1, 2, 3].map(function () { return '<div class="skeleton sk-card"></div>'; }).join('') + '</div>';
     }
     if (S.ideasError) return '<div class="empty">' + esc(S.ideasError) + '</div>';
@@ -466,7 +480,9 @@
     var rise = S.rising[r];
     var riseHTML;
     if (!rise) riseHTML = '<div class="skeleton" style="height:160px"></div>';
-    else if (rise.desactive) riseHTML = '<div class="notice">Cette liste vient de YouTube. Lance l\'appli avec une clé <code>YOUTUBE_API_KEY</code> pour voir les remix et mashups qui gagnent le plus de vues en ce moment.</div>';
+    else if (rise.desactive) riseHTML = '<div class="notice">Cette liste vient de YouTube. ' + (serverMode === false ?
+      'Ajoute ta clé YouTube dans les <button type="button" class="linklike" data-settings>réglages</button>' :
+      'Lance l\'appli avec une clé <code>YOUTUBE_API_KEY</code>') + ' pour voir les remix et mashups qui gagnent le plus de vues en ce moment.</div>';
     else if (!rise.remix.length) riseHTML = '<div class="notice">Rien de notable ces 14 derniers jours.</div>';
     else riseHTML = rise.remix.map(function (x) {
       return '<div class="rise-row"><div class="thumb"><img src="' + esc(x.pochette) + '" alt="" loading="lazy"></div>' +
@@ -659,6 +675,25 @@
     if (e.target.id === 'few-only') { S.fewOnly = e.target.checked; render(); }
   });
   window.addEventListener('hashchange', onRoute);
+  window.addEventListener('rf-progress', function (e) {
+    var el = $('#ideas-progress');
+    if (el) el.textContent = 'Analyse des extraits : ' + e.detail.done + ' / ' + e.detail.total + ' (mis en cache pour les prochaines fois)';
+  });
+
+  // Réglages (version navigateur) : clé YouTube stockée localement
+  var dlg = $('#settings');
+  function openSettings() { $('#yt-key').value = localStorage.getItem('rf-yt-key') || ''; dlg.showModal(); }
+  dlg.addEventListener('close', function () {
+    if (dlg.returnValue !== 'save') return;
+    var v = $('#yt-key').value.trim();
+    if (v) localStorage.setItem('rf-yt-key', v); else localStorage.removeItem('rf-yt-key');
+    S.youtube = !!v; S.trends = {}; S.rising = {};
+    toast(v ? 'Clé YouTube enregistrée dans ce navigateur.' : 'Clé YouTube supprimée.');
+    if (S.view === 'recherche' && S.title) runSearch(); else onRoute();
+  });
+  $('#settings-btn').addEventListener('click', openSettings);
+  document.addEventListener('click', function (e) { if (e.target.closest('[data-settings]')) openSettings(); });
+  modeReady.then(function () { $('#settings-btn').hidden = serverMode; if (S.view === 'recherche' && !S.title) render(); });
 
   api('/api/status').then(function (s) { S.youtube = s.youtube; S.soundcloud = s.soundcloud; if (S.view === 'recherche') renderResults(); }).catch(function () {});
   onRoute();
