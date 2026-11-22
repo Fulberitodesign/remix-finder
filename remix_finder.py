@@ -200,7 +200,8 @@ def youtube(artist, title, key):
     for suffix in SEARCH_SUFFIXES:
         data = get("https://www.googleapis.com/youtube/v3/search",
                    {"part": "snippet", "type": "video", "maxResults": 50,
-                    "q": f"{artist} {title} {suffix}", "key": key})
+                    "q": f"{artist} {title} {suffix}"},
+                   headers={"X-goog-api-key": key})  # clé dans un en-tête : jamais dans les URL ni les journaux
         for item in (data or {}).get("items", []):
             sn = item.get("snippet", {})
             name = sn.get("title", "")

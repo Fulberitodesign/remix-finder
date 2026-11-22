@@ -131,7 +131,8 @@ def youtube_stats(items):
     stats = {}
     for start in range(0, len(ids), 50):
         data = rf.get("https://www.googleapis.com/youtube/v3/videos",
-                      {"part": "statistics,snippet", "id": ",".join(ids[start:start + 50]), "key": yt_key()}) or {}
+                      {"part": "statistics,snippet", "id": ",".join(ids[start:start + 50])},
+                      headers={"X-goog-api-key": yt_key()}) or {}
         for v in data.get("items", []):
             stats[v["id"]] = v
     today = datetime.now(timezone.utc)
@@ -367,10 +368,11 @@ def rising():
     def fetch():
         after = (datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%SZ")
         params = {"part": "snippet", "type": "video", "q": "remix|mashup", "order": "viewCount",
-                  "videoCategoryId": "10", "publishedAfter": after, "maxResults": 25, "key": yt_key()}
+                  "videoCategoryId": "10", "publishedAfter": after, "maxResults": 25}
         if YT_REGION.get(region):
             params["regionCode"] = YT_REGION[region]
-        data = rf.get("https://www.googleapis.com/youtube/v3/search", params) or {}
+        data = rf.get("https://www.googleapis.com/youtube/v3/search", params,
+                      headers={"X-goog-api-key": yt_key()}) or {}
         items = []
         for it in data.get("items", []):
             sn = it["snippet"]
