@@ -77,6 +77,32 @@ def mentions_song(text, title, category=None):
     return False
 
 
+# Plateformes où les artistes proposent eux-mêmes leurs morceaux (gratuitement ou à l'achat).
+# Les hébergeurs de fichiers génériques (Dropbox, Drive, Mega, WeTransfer…) sont volontairement ignorés.
+DOWNLOAD_HOSTS = [
+    (r"hypeddit\.com", "Hypeddit", "gratuit"),
+    (r"toneden\.io", "ToneDen", "gratuit"),
+    (r"(?:[a-z0-9-]+\.)?bandcamp\.com", "Bandcamp", "achat"),
+    (r"beatport\.com", "Beatport", "achat"),
+    (r"traxsource\.com", "Traxsource", "achat"),
+    (r"junodownload\.com", "Juno Download", "achat"),
+]
+_URL_RE = re.compile(r"https?://[^\s<>\"')\]]+", re.I)
+
+
+def download_links(text):
+    """Liens de téléchargement légal trouvés dans une description (YouTube, Mixcloud, SoundCloud)."""
+    out, seen = [], set()
+    for url in _URL_RE.findall(text or ""):
+        url = url.rstrip(".,;")
+        host = re.sub(r"^https?://(www\.)?", "", url, flags=re.I).split("/")[0].lower()
+        for pattern, name, kind in DOWNLOAD_HOSTS:
+            if re.fullmatch(pattern, host) and url not in seen:
+                seen.add(url)
+                out.append({"nom": name, "url": url, "type": kind})
+    return out
+
+
 def get(url, params=None, headers=None, retries=3):
     headers = {"User-Agent": USER_AGENT, **(headers or {})}
     for attempt in range(retries):
@@ -212,6 +238,7 @@ def mixcloud(artist, title):
                     "date": (c.get("created_time") or "")[:10],
                     "ecoutes": c.get("play_count", 0),
                     "jour_publication": c.get("created_time", ""),
+                    "mixcloud_key": c.get("key", ""),
                 })
     return results
 
@@ -259,6 +286,9 @@ def soundcloud(artist, title, client_id, client_secret):
                     "date": created[:10],
                     "ecoutes": t.get("playback_count", 0) or 0,
                     "jour_publication": created[:10],
+                    # bouton « Télécharger » activé par l'artiste, + liens de sa description
+                    "liens_telechargement": ([{"nom": "SoundCloud", "url": t.get("permalink_url", ""), "type": "gratuit"}]
+                                             if t.get("downloadable") else []) + download_links(t.get("description", "")),
                 })
     return results
 

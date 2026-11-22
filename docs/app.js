@@ -79,7 +79,7 @@
     loading: false, data: null, error: null,
     analysis: null, analysisLoading: false,
     ideas: null, ideasLoading: false, ideasError: null,
-    cat: 'all', officialOnly: false, sort: 'pop', trendOnly: false,
+    cat: 'all', officialOnly: false, freeOnly: false, dlOpen: {}, sort: 'pop', trendOnly: false,
     region: localStorage.getItem('rf-region') || 'fr',
     trends: {}, rising: {}, trendsLoading: false, fewOnly: false,
     youtube: false, soundcloud: false,
@@ -205,7 +205,7 @@
   function visibleResults() {
     if (!S.data) return [];
     var list = S.data.resultats.filter(function (r) {
-      return (S.cat === 'all' || r.categorie === S.cat) && (!S.officialOnly || r.officiel);
+      return (S.cat === 'all' || r.categorie === S.cat) && (!S.officialOnly || r.officiel) && (!S.freeOnly || hasFree(r));
     });
     var key = { pop: 'popularite', rise: 'vues_par_jour', recent: 'date' }[S.sort];
     return list.slice().sort(function (a, b) {
@@ -316,6 +316,40 @@
     return '<div class="thumb">' + inner + playBtn(t, 'play') + '</div>';
   }
 
+  // ---------------------------------------------------------------- téléchargement légal
+  // Liens gratuits trouvés dans les descriptions (Hypeddit, ToneDen, téléchargement SoundCloud)
+  // + liens d'achat pour les morceaux sortis officiellement (présents sur Deezer ou MusicBrainz)
+  function hasFree(r) { return (r.liens_telechargement || []).some(function (l) { return l.type === 'gratuit'; }); }
+  function downloadOptions(r) {
+    var found = r.liens_telechargement || [];
+    var free = found.filter(function (l) { return l.type === 'gratuit'; });
+    var buy = found.filter(function (l) { return l.type !== 'gratuit'; });
+    var released = r.sources.some(function (s) { return s === 'Deezer' || s === 'MusicBrainz'; });
+    if (released) {
+      var q = encodeURIComponent(r.titre + ' ' + (r.artiste || ''));
+      buy = buy.concat([
+        { nom: 'Beatport', url: 'https://www.beatport.com/search?q=' + q, recherche: true },
+        { nom: 'Bandcamp', url: 'https://bandcamp.com/search?q=' + q, recherche: true },
+        { nom: 'Apple Music / iTunes', url: 'https://music.apple.com/fr/search?term=' + q, recherche: true }
+      ]);
+    }
+    return { free: free, buy: buy };
+  }
+  function rowKey(r) { return r.lien || r.titre; }
+  function dlPanelHTML(r) {
+    var o = downloadOptions(r);
+    function link(l, cls) {
+      return '<a class="dl-link ' + cls + '" href="' + esc(l.url) + '" target="_blank" rel="noopener">' + I.dl + ' ' + esc(l.nom) +
+        (l.recherche ? ' <span class="muted small">(recherche)</span>' : '') + '</a>';
+    }
+    return '<div class="dl-panel">' +
+      (o.free.length ? '<div class="dl-group"><span class="dl-label">Téléchargement gratuit proposé par l\'artiste</span><div class="dl-links">' + o.free.map(function (l) { return link(l, 'free'); }).join('') + '</div></div>' : '') +
+      (o.buy.length ? '<div class="dl-group"><span class="dl-label">Acheter</span><div class="dl-links">' + o.buy.map(function (l) { return link(l, ''); }).join('') + '</div></div>' : '') +
+      (!o.free.length && !o.buy.length ? '<span class="muted small">Aucun téléchargement légal trouvé pour ce titre. Tu peux demander directement à l\'artiste via sa page.</span>' : '') +
+      '<p class="muted small" style="margin:0">Remix Finder ne télécharge rien lui-même : il t\'envoie vers les pages où l\'artiste ou un magasin propose le morceau.</p>' +
+      '</div>';
+  }
+
   function rowHTML(r, extra) {
     var cat = CATS[r.categorie] || { label: r.categorie, color: 'var(--muted)' };
     var rising = (r.vues_par_jour || 0) >= 2000;
@@ -328,16 +362,18 @@
     return '<article class="row">' + thumbHTML(r) +
       '<div class="row-main"><span class="row-title">' + esc(r.titre) + '</span>' +
       '<span class="muted small">' + esc(r.artiste || '—') + '</span>' +
-      (meta.length ? '<span class="row-meta">' + meta.join('') + '</span>' : '') + '</div>' +
+      (meta.length ? '<span class="row-meta">' + meta.map(function (m) { return '<span>' + m + '</span>'; }).join('') + '</span>' : '') + '</div>' +
       '<div class="row-tags">' + (extra || '') +
       (rising ? '<span class="tag hot">' + I.up + ' En hausse</span>' : '') +
       '<span class="tag cat" style="background:' + cat.color + '">' + esc(cat.label) + '</span>' +
       (r.officiel ? '<span class="tag off">Officiel</span>' : '') +
+      (hasFree(r) ? '<span class="tag free">' + I.dl + ' Gratuit</span>' : '') +
       r.sources.map(function (s) { return '<span class="tag">' + esc(s) + '</span>'; }).join('') +
       '</div>' +
+      '<button type="button" class="row-open' + (hasFree(r) ? ' dl-free' : '') + '" data-dl="' + esc(rowKey(r)) + '" aria-expanded="' + !!S.dlOpen[rowKey(r)] + '" aria-label="Télécharger légalement ' + esc(r.titre) + '" title="Télécharger (légal)">' + I.dl + '</button>' +
       tiktokLink(r.titre, 'row-open') +
       '<a class="row-open" href="' + esc(r.lien) + '" target="_blank" rel="noopener" aria-label="Ouvrir sur ' + esc(r.sources[0]) + '">' + I.ext + '</a>' +
-      '</article>';
+      '</article>' + (S.dlOpen[rowKey(r)] ? dlPanelHTML(r) : '');
   }
 
   function groupHTML(g) {
@@ -354,7 +390,7 @@
     var all = S.data ? S.data.resultats : [];
     var counts = { all: 0 };
     all.forEach(function (r) {
-      if (S.officialOnly && !r.officiel) return;
+      if ((S.officialOnly && !r.officiel) || (S.freeOnly && !hasFree(r))) return;
       counts.all++; counts[r.categorie] = (counts[r.categorie] || 0) + 1;
     });
     var tabs = [['all', 'Tout', 'var(--text)']].concat(Object.keys(CATS).map(function (k) { return [k, CATS[k].label, CATS[k].color]; }));
@@ -363,7 +399,8 @@
       tabs.map(function (t) {
         return '<button type="button" class="cat-btn" data-cat="' + t[0] + '" aria-pressed="' + (S.cat === t[0]) + '"><span><span class="dot" style="background:' + t[2] + '"></span>' + t[1] + '</span><span class="n">' + (S.loading ? '' : (counts[t[0]] || 0)) + '</span></button>';
       }).join('') + '</div>' +
-      '<div class="panel" style="padding:4px 16px"><label class="check"><input type="checkbox" id="official"' + (S.officialOnly ? ' checked' : '') + '> Remix officiels uniquement</label></div>' +
+      '<div class="panel" style="padding:4px 16px"><label class="check"><input type="checkbox" id="official"' + (S.officialOnly ? ' checked' : '') + '> Remix officiels uniquement</label>' +
+      '<label class="check"><input type="checkbox" id="free-only"' + (S.freeOnly ? ' checked' : '') + '> Téléchargement gratuit uniquement</label></div>' +
       (serverMode === false ?
         (S.youtube ? '' : '<div class="notice">Ajoute ta clé YouTube dans les <button type="button" class="linklike" data-settings>réglages</button> pour les mashups et remix publiés sur YouTube.</div>') :
       (S.youtube && S.soundcloud ? '' : '<div class="notice">' +
@@ -638,10 +675,12 @@
   // ------------------------------------------------------------ export CSV
   function exportCSV() {
     var rows = visibleResults();
-    var head = ['categorie', 'titre', 'artiste', 'sources', 'officiel', 'vues', 'vues_par_jour', 'popularite', 'date', 'lien'];
+    var head = ['categorie', 'titre', 'artiste', 'sources', 'officiel', 'vues', 'vues_par_jour', 'popularite', 'date', 'lien', 'telechargement_legal'];
     var lines = [head.join(';')].concat(rows.map(function (r) {
       return head.map(function (h) {
-        var v = h === 'sources' ? r.sources.join(', ') : (r[h] == null ? '' : r[h]);
+        var v = h === 'sources' ? r.sources.join(', ') :
+          h === 'telechargement_legal' ? (r.liens_telechargement || []).map(function (l) { return l.nom + ' ' + l.url; }).join(' | ') :
+          (r[h] == null ? '' : r[h]);
         return '"' + String(v).replace(/"/g, '""') + '"';
       }).join(';');
     }));
@@ -655,9 +694,10 @@
 
   // ------------------------------------------------------------ événements délégués
   document.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-play],[data-go],[data-cat],[data-sort],[data-region],[data-variants],#csv');
+    var t = e.target.closest('[data-play],[data-go],[data-cat],[data-sort],[data-region],[data-variants],[data-dl],#csv');
     if (!t) return;
     if (t.dataset.play) return play(t.dataset.play);
+    if (t.dataset.dl) { S.dlOpen[t.dataset.dl] = !S.dlOpen[t.dataset.dl]; return renderResults(); }
     if (t.dataset.variants) { S.open[t.dataset.variants] = !S.open[t.dataset.variants]; return renderResults(); }
     if (t.dataset.go) { var x = JSON.parse(t.dataset.go); return go(x[0], x[1], x[2] || 'recherche'); }
     if (t.dataset.cat) { S.cat = t.dataset.cat; return renderResults(); }
@@ -671,6 +711,7 @@
   });
   document.addEventListener('change', function (e) {
     if (e.target.id === 'official') { S.officialOnly = e.target.checked; renderResults(); }
+    if (e.target.id === 'free-only') { S.freeOnly = e.target.checked; renderResults(); }
     if (e.target.id === 'trend-only') { S.trendOnly = e.target.checked; renderIdeas(); }
     if (e.target.id === 'few-only') { S.fewOnly = e.target.checked; render(); }
   });

@@ -74,6 +74,7 @@ $env:YOUTUBE_API_KEY="ta_cle"; python app.py
 ## Fonctions
 
 - **Recherche** avec autocomplétion, tri par popularité, par vues gagnées par jour ou par date, filtres par catégorie, variantes regroupées (slowed, nightcore…), extraits audio de 30 s et export CSV.
+- **Téléchargement légal** : un bouton sur chaque résultat renvoie vers les téléchargements gratuits proposés par l'artiste (Hypeddit, ToneDen, bouton de téléchargement SoundCloud) trouvés dans les descriptions, et vers les magasins (Beatport, Bandcamp, Apple Music) pour les morceaux sortis officiellement. Remix Finder ne télécharge jamais de fichier lui-même : récupérer des morceaux sur YouTube, Deezer, Mixcloud ou SoundCloud sans l'accord des ayants droit est interdit.
 - **Titre d'origine** : tempo, tonalité et code Camelot, calculés à partir de l'extrait Deezer.
 - **Idées de mashup** (page à part) : titres du top et d'artistes proches, notés selon la compatibilité de tempo et de tonalité (roue de Camelot).
 - **Tendances** : top Deezer France, Monde et États-Unis, avec le nombre de remix existants pour repérer les titres encore peu remixés.

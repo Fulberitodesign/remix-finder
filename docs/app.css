@@ -271,3 +271,16 @@ h1, h2, h3 { font-family: var(--display); margin: 0; letter-spacing: -0.01em; }
 .dialog-field input { height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg); color: var(--text); font: inherit; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .linklike { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+
+/* ---------- téléchargement légal */
+.tag.free { background: #16301F; color: var(--good); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+button.row-open { border: 0; background: transparent; cursor: pointer; }
+.row-open.dl-free { color: var(--good); }
+.row-open[aria-expanded="true"] { color: var(--accent-text); background: var(--surface-2); }
+.dl-panel { margin: -4px 0 4px 34px; padding: 14px 16px; border-left: 2px solid var(--accent); background: var(--surface); border-radius: 0 12px 12px 0; display: flex; flex-direction: column; gap: 12px; }
+.dl-group { display: flex; flex-direction: column; gap: 8px; }
+.dl-label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.dl-links { display: flex; gap: 8px; flex-wrap: wrap; }
+.dl-link { min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line-2); display: inline-flex; align-items: center; gap: 8px; color: var(--text); text-decoration: none; font-size: 14px; }
+.dl-link:hover { color: var(--text); border-color: var(--muted); background: var(--surface-2); }
+.dl-link.free { border-color: #2D5A3A; color: var(--good); }

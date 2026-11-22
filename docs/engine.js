@@ -46,6 +46,28 @@
     return false;
   }
 
+  // Plateformes où les artistes proposent eux-mêmes leurs morceaux (même liste que remix_finder.py).
+  // Les hébergeurs de fichiers génériques (Dropbox, Drive, Mega, WeTransfer…) sont volontairement ignorés.
+  var DOWNLOAD_HOSTS = [
+    [/^hypeddit\.com$/, 'Hypeddit', 'gratuit'],
+    [/^toneden\.io$/, 'ToneDen', 'gratuit'],
+    [/^([a-z0-9-]+\.)?bandcamp\.com$/, 'Bandcamp', 'achat'],
+    [/^beatport\.com$/, 'Beatport', 'achat'],
+    [/^traxsource\.com$/, 'Traxsource', 'achat'],
+    [/^junodownload\.com$/, 'Juno Download', 'achat']
+  ];
+  function downloadLinks(text) {
+    var out = [], seen = {};
+    ((text || '').match(/https?:\/\/[^\s<>"')\]]+/gi) || []).forEach(function (url) {
+      url = url.replace(/[.,;]+$/, '');
+      var host = url.replace(/^https?:\/\/(www\.)?/i, '').split('/')[0].toLowerCase();
+      DOWNLOAD_HOSTS.forEach(function (h) {
+        if (h[0].test(host) && !seen[url]) { seen[url] = 1; out.push({ nom: h[1], url: url, type: h[2] }); }
+      });
+    });
+    return out;
+  }
+
   // ---------------------------------------------------------------- réseau
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function qs(params) { return new URLSearchParams(params || {}).toString(); }
@@ -196,7 +218,7 @@
           var cat = classify(c.name);
           if (cat && mentionsSong(c.name, title, cat)) out.push({ categorie: cat, titre: c.name, artiste: (c.user || {}).name || '',
             source: 'Mixcloud', lien: c.url, pochette: (c.pictures || {}).large || '', date: (c.created_time || '').slice(0, 10),
-            ecoutes: c.play_count || 0 });
+            ecoutes: c.play_count || 0, mixcloud_key: c.key || '' });
         });
       });
       return out;
@@ -235,6 +257,8 @@
         var v = stats[it.video_id];
         if (!v) return;
         var views = parseInt((v.statistics || {}).viewCount || '0', 10);
+        var links = downloadLinks((v.snippet || {}).description);
+        if (links.length) it.liens_telechargement = links;
         it.vues = views;
         it.date = (v.snippet.publishedAt || '').slice(0, 10);
         var days = Math.max(1, Math.floor((Date.now() - new Date(v.snippet.publishedAt)) / 864e5));
@@ -309,14 +333,24 @@
         r.officiel = !!(artist && (r.categorie === 'remix' || r.categorie === 'edit') &&
           norm(r.artiste).indexOf(norm(artist)) === 0 && !r.sources.some(function (s) { return STANDALONE.indexOf(s) >= 0; }));
       });
+      // Liens de téléchargement légal dans les descriptions des mixes Mixcloud
+      var mc = results.filter(function (r) { return r.mixcloud_key; }).slice(0, 40);
+      var mcP = mapLimit(mc, 4, function (r) {
+        return cached('mc-' + r.mixcloud_key, 86400, function () {
+          return getJSON('https://api.mixcloud.com' + r.mixcloud_key).catch(function () { return {}; });
+        }).then(function (d) {
+          var links = downloadLinks(d.description);
+          if (links.length) r.liens_telechargement = links;
+        });
+      });
       // Dates de sortie Deezer (via l'album), pour les 40 albums les plus populaires
       var albums = [];
       results.slice().sort(function (a, b) { return (b.rang_deezer || 0) - (a.rang_deezer || 0); }).forEach(function (r) {
         if (r.album_id && !r.date && albums.indexOf(r.album_id) < 0 && albums.length < 40) albums.push(r.album_id);
       });
-      return mapLimit(albums, 4, function (id) {
+      return mcP.then(function () { return mapLimit(albums, 4, function (id) {
         return cached('album-' + id, 86400, function () { return deezer('/album/' + id); });
-      }).then(function (ds) {
+      }); }).then(function (ds) {
         var dates = {};
         albums.forEach(function (id, i) { dates[id] = (ds[i] || {}).release_date || ''; });
         results.forEach(function (r) { if (!r.date && r.album_id) r.date = dates[r.album_id] || ''; });
@@ -491,6 +525,6 @@
       if (!fn) return Promise.reject(new Error('Inconnu : ' + path));
       return Promise.resolve().then(function () { return fn(params || {}); });
     },
-    classify: classify, mentionsSong: mentionsSong, norm: norm
+    classify: classify, mentionsSong: mentionsSong, norm: norm, downloadLinks: downloadLinks
   };
 })(window);

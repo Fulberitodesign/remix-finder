@@ -69,6 +69,11 @@ def deezer_album_date(album_id):
     return data.get("release_date", "")
 
 
+def mixcloud_description(key):
+    data = cached(f"mc-{key}", 86400, lambda: rf.get(f"https://api.mixcloud.com{key}") or {})
+    return data.get("description", "") or ""
+
+
 def short_track(t, **extra):
     album = t.get("album") or {}
     return {
@@ -135,6 +140,9 @@ def youtube_stats(items):
         if not v:
             continue
         views = int(v.get("statistics", {}).get("viewCount", 0))
+        links = rf.download_links(v["snippet"].get("description", ""))
+        if links:
+            it["liens_telechargement"] = links
         published = v["snippet"].get("publishedAt", "")
         it["vues"] = views
         it["date"] = published[:10]
@@ -235,6 +243,13 @@ def search():
             artist and r["categorie"] in ("remix", "edit")
             and rf.norm(r.get("artiste")).startswith(rf.norm(artist))
             and not set(r["sources"]) & set(STANDALONE))
+
+    # Liens de téléchargement légal dans les descriptions des mixes Mixcloud
+    mc = [r for r in results if r.get("mixcloud_key")]
+    for r, desc in zip(mc, POOL.map(mixcloud_description, [r["mixcloud_key"] for r in mc])):
+        links = rf.download_links(desc)
+        if links:
+            r["liens_telechargement"] = links
 
     # Dates de sortie Deezer (via l'album) et stats YouTube
     albums = {r["album_id"] for r in results if r.get("album_id") and not r.get("date")}

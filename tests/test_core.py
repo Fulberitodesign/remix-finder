@@ -57,3 +57,17 @@ def test_compatibility_scores():
     assert bad["score"] < 30
     assert audio.camelot_relation("4A", "4B")[1].startswith("relative")
     assert audio.camelot_relation("12A", "1A")[1] == "tonalité voisine"
+
+
+def test_download_links_only_artist_platforms():
+    text = ("Free DL: https://hypeddit.com/dj/track-remix. Buy: https://artist.bandcamp.com/track/x "
+            "Beatport https://www.beatport.com/release/y/1 and https://www.dropbox.com/s/abc/file.mp3 "
+            "https://mega.nz/file/zzz")
+    links = rf.download_links(text)
+    names = [(l["nom"], l["type"]) for l in links]
+    assert ("Hypeddit", "gratuit") in names
+    assert ("Bandcamp", "achat") in names
+    assert ("Beatport", "achat") in names
+    # les hébergeurs de fichiers génériques sont ignorés
+    assert not any("dropbox" in l["url"] or "mega.nz" in l["url"] for l in links)
+    assert links[0]["url"] == "https://hypeddit.com/dj/track-remix"
