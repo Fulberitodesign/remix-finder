@@ -90,11 +90,14 @@
   // MusicBrainz : 1 requête par seconde
   var mbQueue = Promise.resolve();
   function mb(path, params) {
-    var p = mbQueue.then(function () {
-      return getJSON('https://musicbrainz.org/ws/2' + path, Object.assign({ fmt: 'json' }, params))
-        .catch(function () { return sleep(1500).then(function () { return getJSON('https://musicbrainz.org/ws/2' + path, Object.assign({ fmt: 'json' }, params)); }); })
-        .catch(function () { return {}; });
-    });
+    var url = 'https://musicbrainz.org/ws/2' + path, q = Object.assign({ fmt: 'json' }, params);
+    function attempt(n) {
+      return getJSON(url, q).catch(function (e) {
+        if (n >= 3) return { __erreur: true };
+        return sleep(1500 * (n + 1)).then(function () { return attempt(n + 1); });  // 503 = surcharge passagère
+      });
+    }
+    var p = mbQueue.then(function () { return attempt(0); });
     mbQueue = p.then(function () { return sleep(1100); });
     return p;
   }
@@ -169,6 +172,7 @@
     }).then(function () {
       return mb('/recording', { query: 'recording:"' + title + '" AND (remix OR mix OR mashup OR edit OR bootleg)', limit: 100 });
     }).then(function (d) {
+      if (d.__erreur && !out.length) throw new Error('MusicBrainz est surchargé, réessaie dans un instant');
       (d.recordings || []).forEach(function (rec) {
         var cat = classify(rec.title + ' ' + (rec.disambiguation || ''));
         if (cat && mentionsSong(rec.title, title, cat)) {
